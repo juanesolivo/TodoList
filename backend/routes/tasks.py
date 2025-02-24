@@ -10,15 +10,16 @@ router = APIRouter()
 
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="auth/login")
 
-# Conectar con MongoDB (local)
+# Conectar MongoDB (local)
 client = AsyncIOMotorClient(MONGO_URL)
 db = client.todolist_db  # Base de datos
-taskcollection = db.tasks  # Colección (tabla)
+taskcollection = db.tasks  # Coleccion (tabla)
 
-# Obtener todas las tareas
+# Obtener todas las tareas del usuario autenticado
 @router.get("/")
-async def get_tasks():
-    tasks = await taskcollection.find().to_list(length=None)
+async def get_tasks(current_user: dict = Depends(get_current_user)):
+    user_email = current_user["email"]
+    tasks = await taskcollection.find({"created_by": user_email}).to_list(length=None)
     for task in tasks:
         task["id"] = str(task["_id"])
         del task["_id"]
@@ -32,31 +33,49 @@ async def create_task(task: Task, current_user: dict = Depends(get_current_user)
     new_task = await taskcollection.insert_one(task_dict)
     return {"message": "Tarea creada", "task_id": str(new_task.inserted_id)}
 
-# Actualizar una tarea
+# Actualizar una tarea (solo si es el creador)
 @router.put("/{task_id}")
-async def update_task(task_id: str, updated_task: Task):
+async def update_task(task_id: str, updated_task: Task, current_user: dict = Depends(get_current_user)):
     if not ObjectId.is_valid(task_id):
         raise HTTPException(status_code=400, detail="ID de tarea no válido")
     
+    task = await taskcollection.find_one({"_id": ObjectId(task_id)})
+    if not task:
+        raise HTTPException(status_code=404, detail="Tarea no encontrada")
+    
+    if task.get("created_by") != current_user["email"]:
+        raise HTTPException(status_code=403, detail="No tienes permiso para actualizar esta tarea")
+    
+    # Extraer datos de actualización y forzar 'created_by'
+    updated_data = updated_task.dict()
+    updated_data.pop("created_by", None)  # Eliminar si viene en el body
+    updated_data["created_by"] = current_user["email"]
+    
     result = await taskcollection.update_one(
-        {"_id": ObjectId(task_id)}, {"$set": updated_task.dict()}
+        {"_id": ObjectId(task_id)},
+        {"$set": updated_data}
     )
-
+    
     if result.matched_count == 0:
         raise HTTPException(status_code=404, detail="Tarea no encontrada")
-
+    
     return {"message": "Tarea actualizada"}
 
-# Eliminar una tarea
+# Eliminar una tarea (solo si es el creador)
 @router.delete("/{task_id}")
-async def delete_task(task_id: str):
+async def delete_task(task_id: str, current_user: dict = Depends(get_current_user)):
+    if not ObjectId.is_valid(task_id):
+        raise HTTPException(status_code=400, detail="ID de tarea no válido")
+    
+    task = await taskcollection.find_one({"_id": ObjectId(task_id)})
+    if not task:
+        raise HTTPException(status_code=404, detail="Tarea no encontrada")
+    
+    if task.get("created_by") != current_user["email"]:
+        raise HTTPException(status_code=403, detail="No tienes permiso para eliminar esta tarea")
+    
     result = await taskcollection.delete_one({"_id": ObjectId(task_id)})
-
     if result.deleted_count == 0:
         raise HTTPException(status_code=404, detail="Tarea no encontrada")
-
+    
     return {"message": "Tarea eliminada"}
-
-@router.get("/debug-token")
-async def debug_token(token: str = Depends(oauth2_scheme)):
-    return {"token": token}

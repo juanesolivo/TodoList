@@ -6,20 +6,10 @@ from config import MONGO_URL
 
 router = APIRouter()
 
-# Conectar con MongoDB (local)
+# Conectar MongoDB (local)
 client = AsyncIOMotorClient(MONGO_URL)
 db = client.todolist_db  # Base de datos
 usercollection = db.users  # Colección (tabla)
-
-# Obtener usuarios (endpoint temporal debug)
-@router.get("/users/")
-async def get_users():
-    users = []
-    async for user in usercollection.find():
-        user["id"] = str(user["_id"])
-        del user["_id"]
-        users.append(user)
-    return users
 
 # Registro de usuario
 @router.post("/signup/")

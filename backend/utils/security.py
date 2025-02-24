@@ -7,7 +7,7 @@ from config import SECRET_KEY
 from motor.motor_asyncio import AsyncIOMotorClient
 from config import MONGO_URL
 
-# Conectar con MongoDB (local)
+# Conectar MongoDB (local)
 client = AsyncIOMotorClient(MONGO_URL)
 db = client.todolist_db  # Base de datos
 usercollection = db.users  # Colección (tabla)
