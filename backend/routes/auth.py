@@ -6,6 +6,7 @@ from config import MONGO_URL
 
 router = APIRouter()
 
+
 # Conectar MongoDB (local)
 client = AsyncIOMotorClient(MONGO_URL)
 db = client.todolist_db  # Base de datos
